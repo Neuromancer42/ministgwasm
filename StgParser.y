@@ -44,6 +44,7 @@ import qualified Data.Text as T
   gt        { T_Gt }
   varid     { T_VarId $$ }
   constrid  { T_ConstrId $$ }
+  default   { T_Default }
 
 %%
 
@@ -121,11 +122,11 @@ var :: { Var }
 
 vars :: { [Var] }
      : var          { [$1] }
-     | vars : var   { $1 ++ [$2] }
+     | vars var   { $1 ++ [$2] }
 
 atom :: { Atom }
      : var          { AtomVar $1 }
-     | lietral      { AtomLit $1 }
+     | literal      { AtomLit $1 }
 
 atoms :: { [Atom] }
       : atom        { [$1] }

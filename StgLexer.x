@@ -40,6 +40,7 @@ tokens :-
   "/=#"                 { \s -> T_Neq }
   ">=#"                 { \s -> T_Gt }
   ">#"                  { \s -> T_Gt }
+  default               { \s -> T_Default }
   [$lower \_][$alpha $digit \_ \']      { \s -> T_VarId $ T.pack s }
   $upper[$alpha $digit \_]"#"           { \s -> T_ConstrId $ T.pack s }
 
@@ -68,6 +69,7 @@ data StgToken
     | T_Neq
     | T_Geq
     | T_Gt
+    | T_Default
     | T_VarId Text
     | T_ConstrId Text
 
