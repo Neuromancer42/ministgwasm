@@ -80,19 +80,19 @@ nondefaultalts :: { NonDefaultAlts }
                | primitivealts          { PrimitiveAlts (NE.reverse $1) }
 
 algebraicalts :: { NonEmpty AlgebraicAlt }
-              : algebraicalt ';'
-                        { $1 :| [] }
-              | algebraicalts algebraicalt ';'
+              : algebraicalts algebraicalt ';'
                         { NE.cons $2 $1 }
+              | algebraicalt ';'
+                        { $1 :| [] }
 
 algebraicalt :: { AlgebraicAlt }
              : constr vars to expr { AlgebraicAlt $1 $2 $4 }
 
 primitivealts :: { NonEmpty PrimitiveAlt }
-              : primitivealt ';'
-                        { $1 :| [] }
-              | primitivealts primitivealt
+              : primitivealts primitivealt ';'
                         { NE.cons $2 $1 }
+              | primitivealt ';'
+                        { $1 :| [] }
 
 primitivealt :: { PrimitiveAlt }
              : literal to expr          { PrimitiveAlt $1 $3 }
@@ -121,19 +121,20 @@ var :: { Var }
     : varid         { Var $1 }
 
 vars :: { [Var] }
-     : var          { [$1] }
-     | vars var   { $1 ++ [$2] }
+     : vars var   { $1 ++ [$2] }
+     | var          { [$1] }
 
 atom :: { Atom }
      : var          { AtomVar $1 }
      | literal      { AtomLit $1 }
 
 atoms :: { [Atom] }
-      : atom        { [$1] }
-      | atoms atom  { $1 ++ [$2] }
+      : atoms atom  { $1 ++ [$2] }
+      | atom        { [$1] }
 
 constr :: { Constr }
        : constrid   { Constr $1 }
+
 {
 
 parseError :: [Token] -> a
