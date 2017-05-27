@@ -54,7 +54,7 @@ import           GHC.Generics
 import           Language.Haskell.TH.Lift
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<>))
 
-import Stg.Util
+import Language.MiniStg.Util
 
 
 

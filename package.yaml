@@ -1,0 +1,37 @@
+name: ministgwasm
+version: 0.0.1
+category: Compilers
+synopsis: A mini-STG to WebAssembly toy-compiler
+
+stability: alpha
+maintainer: Yifan Chen <chenyifan_1997@hotmail.com>
+copyright: (c) 2017 Yifan Chen (Neuromancer42)
+license: BSD3
+github: Neuromancer42/ministgwasm
+
+extra-source-files:
+  - LICENSE
+  - README.md
+
+build-tools: alex, happy
+
+ghc-options: -Wall
+
+library:
+  source-dirs: src
+  exposed-modules:
+      - Language.MiniStg
+      - Language.MiniStg.Util
+      - Language.MiniStg.Prettyprint
+      - Language.MiniStg.Lexer
+      - Language.MiniStg.Parser
+
+dependencies:
+  - base >= 4.8 && < 5
+  - text
+  - containers
+  - semigroups
+  - deepseq
+  - th-lift
+  - ansi-wl-pprint
+  - array

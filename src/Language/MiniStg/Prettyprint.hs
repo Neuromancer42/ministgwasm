@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Prettyprinting STG elements in various formats.
-module Language.Stg.Prettyprint (
+module Language.MiniStg.Prettyprint (
     Pretty(..),
     prettyprint,
     prettyprintPlain,

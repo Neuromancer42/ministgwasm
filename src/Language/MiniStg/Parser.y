@@ -1,9 +1,9 @@
 {
-module StgParser
-  ( stgParse
+module Language.MiniStg.Parser
+  ( parseStg
   ) where
 
-import StgLexer (lexStg, StgToken)
+import Language.MiniStg.Lexer (lexStg, StgToken (..))
 import Language.MiniStg
 
 import Data.Map.Strict (Map)
@@ -30,7 +30,7 @@ import qualified Data.Text as T
   in        { T_In }
   case      { T_Case }
   of        { T_Of }
-  int       { T_UnboxedInt $$ }
+  integer   { T_UnboxedInteger $$ }
   add       { T_Add }
   sub       { T_Sub }
   mul       { T_Mul }
@@ -48,28 +48,33 @@ import qualified Data.Text as T
 
 %%
 
-prog :: { Binds }
+prog :: { Program }
      : binds                            { Program (Binds $1) }
 
 binds :: { Map Var LambdaForm }
-      : var '=' lf                      { M.singleton $1 $3 }
-      | binds ';' var '=' lf            { M.insert $3 $5 $1 }
+      : binds ';' var '=' lf            { M.insert $3 $5 $1 }
+      | var '=' lf                      { M.singleton $1 $3 }
 
 lf :: { LambdaForm }
    : vars pi vars to expr     { LambdaForm $1 $2 $3 $5 }
+   | pi vars to expr           { LambdaForm [] $1 $2 $4 }
+   | vars pi to expr           { LambdaForm $1 $2 [] $4 }
+   | pi to expr               { LambdaForm [] $1 [] $3 }
 
 pi :: { UpdateFlag }
    : pi_u                               { Update }
    | pi_n                               { NoUpdate }
 
-expr :: { Expression }
-     : let binds in expr                { Let NonRecursive $2 $4 }
-     | letrec binds in expr             { Let Recursive $2 $4 }
+expr :: { Expr }
+     : let binds in expr                { Let NonRecursive (Binds $2) $4 }
+     | letrec binds in expr             { Let Recursive (Binds $2) $4 }
      | case expr of alts                { Case $2 $4 }
      | var atoms                        { AppF $1 $2 }
+     | var                              { AppF $1 [] }
      | constr atoms                     { AppC $1 $2 }
+     | constr                           { AppC $1 [] }
      | prim atom atom                   { AppP $1 $2 $3 }
-     | literal                          { Lit $1 }
+     | literal                          { LitE $1 }
 
 alts :: { Alts }
      : nondefaultalts defaultalt        { Alts $1 $2 }
@@ -102,7 +107,7 @@ defaultalt :: { DefaultAlt }
            | var to expr                { DefaultBound $1 $3 }
 
 literal :: { Literal }
-        : int                           { Literal $1 }
+        : integer                        { Literal $1 }
 
 prim :: { PrimOp }
      : add          { Add }
@@ -121,7 +126,7 @@ var :: { Var }
     : varid         { Var $1 }
 
 vars :: { [Var] }
-     : vars var   { $1 ++ [$2] }
+     : vars var     { $1 ++ [$2] }
      | var          { [$1] }
 
 atom :: { Atom }
@@ -137,11 +142,11 @@ constr :: { Constr }
 
 {
 
-parseError :: [Token] -> a
+parseError :: [StgToken] -> a
 parseError _ = error "Parse error"
 
 -- | The overall STG parser
-parseStg :: Text -> Program
+parseStg :: String -> Program
 parseStg = parseStgToken . lexStg
 
 }
