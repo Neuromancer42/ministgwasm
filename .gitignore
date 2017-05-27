@@ -1,0 +1,7 @@
+*.hi
+*.o
+/cabal.sandbox.config
+/.cabal-sandbox
+*.swp
+StgLexer.hs
+StgParser.hs
