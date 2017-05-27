@@ -52,7 +52,7 @@ prog :: { Binds }
      : binds                            { Program (Binds $1) }
 
 binds :: { Map Var LambdaForm }
-      : var '=' lf                      { M.singleton $1 $3 ] }
+      : var '=' lf                      { M.singleton $1 $3 }
       | binds ';' var '=' lf            { M.insert $3 $5 $1 }
 
 lf :: { LambdaForm }
