@@ -18,7 +18,8 @@ build-tools: alex, happy
 ghc-options: -Wall
 
 library:
-  source-dirs: src
+  source-dirs:
+      - src
   exposed-modules:
       - Language.MiniStg
       - Language.MiniStg.Util

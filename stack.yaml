@@ -37,6 +37,10 @@ resolver: lts-8.15
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - '.'
+- location:
+    git: https://github.com/haskell-wasm/wasm.git
+    commit: 8eecfe50081a5692447fdc495961a1f559fa4c84
+
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps: []
