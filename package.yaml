@@ -27,6 +27,13 @@ library:
       - Language.MiniStg.Lexer
       - Language.MiniStg.Parser
 
+executables:
+  parseStg:
+    source-dirs: app
+    main: parse.hs
+    dependencies:
+      - ministgwasm
+
 dependencies:
   - base >= 4.8 && < 5
   - text

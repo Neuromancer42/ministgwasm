@@ -42,7 +42,7 @@ tokens :-
   ">#"                  { \_ -> T_Gt }
   default               { \_ -> T_Default }
   [$lower \_][$alpha $digit \_ \']*     { \s -> T_VarId $ T.pack s }
-  $upper[$alpha $digit \_]*"#"          { \s -> T_ConstrId $ T.pack s }
+  $upper[$alpha $digit \_]*\#?          { \s -> T_ConstrId $ T.pack s }
 
 {
 
