@@ -1,6 +1,6 @@
 name: ministgwasm
 version: 0.0.1
-category: Compilers
+category: Development
 synopsis: A mini-STG to WebAssembly toy-compiler
 
 stability: alpha
