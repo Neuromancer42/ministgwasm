@@ -43,3 +43,5 @@ dependencies:
   - th-lift
   - ansi-wl-pprint
   - array
+  - llvm-hs
+  - llvm-hs-pure
