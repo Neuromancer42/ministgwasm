@@ -22,11 +22,12 @@ main = do
       let defs = trProgram ast
       let m = defaultModule {moduleName = "test", moduleDefinitions = defs}
       toLLVM m
-
-toLLVM :: AST.Module -> IO ()
-toLLVM m =
-  withContext $ \ctx -> do
-    errOrLLVM <- runExceptT $ withModuleFromAST ctx m moduleLLVMAssembly
-    case errOrLLVM of
-      Left err -> putStrLn $ "error: " ++ err
-      Right llvm -> putStrLn llvm
+       where
+        toLLVM :: AST.Module -> IO ()
+        toLLVM m =
+         withContext $ \ctx -> do
+          errOrLLVM <- runExceptT $ withModuleFromAST ctx m moduleLLVMAssembly
+          case errOrLLVM of
+           Left err -> hPutStrLn stderr $ "error: " ++ err
+           Right llvm -> writeFile ofile llvm
+    _ -> hPutStrLn stderr $ "Usage: compileStg <input> <output>"
