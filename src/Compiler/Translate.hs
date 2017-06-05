@@ -265,7 +265,7 @@ trBody i ref (STG.Case (STG.AppF (STG.Var v) []) (STG.Alts STG.NoNonDefaultAlts 
     STG.Let {} -> error "Error: Complicated alternatives not supported"
     STG.Case {} -> error "Error: Complicated alternatives not supported"
     _ -> trUpdateV i ("layer" ++ show i) ("layer" ++ show (i + 1)) (T.unpack v) ++ trBody i ref e
-trBody i ref STG.Case {} = error "Syntax Error: complicated case evaluation not supported"
+trBody _ _ STG.Case {} = error "Syntax Error: complicated case evaluation not supported"
 trBody i ref e@STG.AppC {} =
   [ BasicBlock
       (Name ("layer" ++ show i))
@@ -291,7 +291,7 @@ trBody i ref e@(STG.AppF (STG.Var f) _) =
        [replaceThunk "ptr_addr0" "retval"])
       (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
   ]
-trBody i ref (STG.AppP op (STG.AtomLit (STG.Literal xl)) (STG.AtomLit (STG.Literal yl))) =
+trBody i _ (STG.AppP op (STG.AtomLit (STG.Literal xl)) (STG.AtomLit (STG.Literal yl))) =
   let o = trOp op
   in [ BasicBlock
          (Name ("layer" ++ show i))
@@ -302,52 +302,71 @@ trBody i ref (STG.AppP op (STG.AtomLit (STG.Literal xl)) (STG.AtomLit (STG.Liter
          ]
          (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
      ]
-trBody i ref (STG.AppP op (STG.AtomLit (STG.Literal xl)) (STG.AtomVar (STG.Var y))) =
-  let o = trOp op
-  in trUpdateV i ("layer" ++ show i) "exit" (T.unpack y) ++
-     [ BasicBlock
-         (Name "exit")
-         [ Name "__val" :=
-           o
-             (ConstantOperand (Const.Int 64 xl))
-             (LocalReference int (Name (T.unpack y ++ "__updated")))
-         , Name "retval" :=
-           Shl False False (LocalReference int (Name "__val")) (ConstantOperand (Const.Int 64 3)) []
-         , replaceThunk "ptr_addr0" "retval"
-         ]
-         (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
-     ]
-trBody i ref (STG.AppP op (STG.AtomVar (STG.Var x)) (STG.AtomLit (STG.Literal yl))) =
-  let o = trOp op
-  in trUpdateV i ("layer" ++ show i) "exit" (T.unpack x) ++
-     [ BasicBlock
-         (Name "exit")
-         [ Name "__val" :=
-           o
-             (LocalReference int (Name (T.unpack x ++ "__updated")))
-             (ConstantOperand (Const.Int 64 yl))
-         , Name "retval" :=
-           Shl False False (LocalReference int (Name "__val")) (ConstantOperand (Const.Int 64 3)) []
-         , replaceThunk "ptr_addr0" "retval"
-         ]
-         (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
-     ]
-trBody i ref (STG.AppP op (STG.AtomVar (STG.Var x)) (STG.AtomVar (STG.Var y))) =
-  let o = trOp op
-  in trUpdateV i ("layer" ++ show i) ("layer" ++ show (i + 1)) (T.unpack x) ++
-     trUpdateV (i + 1) ("layer" ++ show (i + 1)) "exit" (T.unpack y) ++
-     [ BasicBlock
-         (Name "exit")
-         [ Name "__val" :=
-           o
-             (LocalReference int (Name (T.unpack x ++ "__updated")))
-             (LocalReference int (Name (T.unpack y ++ "__updated")))
-         , Name "retval" :=
-           Shl False False (LocalReference int (Name "__val")) (ConstantOperand (Const.Int 64 3)) []
-         , replaceThunk "ptr_addr0" "retval"
-         ]
-         (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
-     ]
+trBody i ref (STG.AppP op (STG.AtomLit (STG.Literal xl)) (STG.AtomVar (STG.Var y)))
+  | S.member y ref =
+    let o = trOp op
+    in trUpdateV i ("layer" ++ show i) "exit" (T.unpack y) ++
+       [ BasicBlock
+           (Name "exit")
+           [ Name "__val" :=
+             o
+               (ConstantOperand (Const.Int 64 xl))
+               (LocalReference int (Name (T.unpack y ++ "__updated")))
+           , Name "retval" :=
+             Shl
+               False
+               False
+               (LocalReference int (Name "__val"))
+               (ConstantOperand (Const.Int 64 3))
+               []
+           , replaceThunk "ptr_addr0" "retval"
+           ]
+           (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
+       ]
+trBody i ref (STG.AppP op (STG.AtomVar (STG.Var x)) (STG.AtomLit (STG.Literal yl)))
+  | S.member x ref =
+    let o = trOp op
+    in trUpdateV i ("layer" ++ show i) "exit" (T.unpack x) ++
+       [ BasicBlock
+           (Name "exit")
+           [ Name "__val" :=
+             o
+               (LocalReference int (Name (T.unpack x ++ "__updated")))
+               (ConstantOperand (Const.Int 64 yl))
+           , Name "retval" :=
+             Shl
+               False
+               False
+               (LocalReference int (Name "__val"))
+               (ConstantOperand (Const.Int 64 3))
+               []
+           , replaceThunk "ptr_addr0" "retval"
+           ]
+           (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
+       ]
+trBody i ref (STG.AppP op (STG.AtomVar (STG.Var x)) (STG.AtomVar (STG.Var y)))
+  | S.member x ref && S.member y ref =
+    let o = trOp op
+    in trUpdateV i ("layer" ++ show i) ("layer" ++ show (i + 1)) (T.unpack x) ++
+       trUpdateV (i + 1) ("layer" ++ show (i + 1)) "exit" (T.unpack y) ++
+       [ BasicBlock
+           (Name "exit")
+           [ Name "__val" :=
+             o
+               (LocalReference int (Name (T.unpack x ++ "__updated")))
+               (LocalReference int (Name (T.unpack y ++ "__updated")))
+           , Name "retval" :=
+             Shl
+               False
+               False
+               (LocalReference int (Name "__val"))
+               (ConstantOperand (Const.Int 64 3))
+               []
+           , replaceThunk "ptr_addr0" "retval"
+           ]
+           (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
+       ]
+trBody _ _ STG.AppP {} = error "Error: Global thunk not supported"
 
 replaceThunk :: String -> String -> Named Instruction
 replaceThunk addr val =
@@ -469,3 +488,6 @@ trOp STG.Mul = \x y -> Sub False False x y []
 trOp STG.Div = \x y -> SDiv False x y []
 trOp STG.Mod = \x y -> SRem x y []
 trOp _ = error "Error: Primitive function not supported"
+
+trProgram :: STG.Program -> [Definition]
+trProgram (STG.Program (STG.Binds m)) = map (uncurry trTopBind) (M.assocs m)
