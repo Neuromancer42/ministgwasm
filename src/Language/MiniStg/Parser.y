@@ -23,8 +23,7 @@ import qualified Data.Text as T
   '='       { T_Bind }
   ';'       { T_Semicolon }
   to        { T_To }
-  pi_u      { T_Pi 'u' }
-  pi_n      { T_Pi 'n' }
+  pi        { T_Pi }
   let       { T_Let }
   letrec    { T_Letrec }
   in        { T_In }
@@ -56,14 +55,10 @@ binds :: { Map Var LambdaForm }
       | var '=' lf                      { M.singleton $1 $3 }
 
 lf :: { LambdaForm }
-   : vars pi vars to expr     { LambdaForm $1 $2 $3 $5 }
-   | pi vars to expr           { LambdaForm [] $1 $2 $4 }
-   | vars pi to expr           { LambdaForm $1 $2 [] $4 }
-   | pi to expr               { LambdaForm [] $1 [] $3 }
-
-pi :: { UpdateFlag }
-   : pi_u                               { Update }
-   | pi_n                               { NoUpdate }
+   : vars pi vars to expr      { LambdaForm $1 Updatable $3 $5 }
+   | pi vars to expr           { LambdaForm [] Updatable $2 $4 }
+   | vars pi to expr           { LambdaForm $1 Updatable [] $4 }
+   | pi to expr                { LambdaForm [] Updatable [] $3 }
 
 expr :: { Expr }
      : let binds in expr                { Let NonRecursive (Binds $2) $4 }

@@ -22,7 +22,7 @@ tokens :-
   \=                    { \_ -> T_Bind }
   \;                    { \_ -> T_Semicolon }
   "->"                  { \_ -> T_To }
-  \\ $lower             { \s -> T_Pi (head . tail $ s) }
+  \\                    { \s -> T_Pi }
   let                   { \_ -> T_Let }
   letrec                { \_ -> T_Letrec }
   in                    { \_ -> T_In }
@@ -51,7 +51,7 @@ data StgToken
     = T_Bind
     | T_Semicolon
     | T_To
-    | T_Pi Char
+    | T_Pi
     | T_Let
     | T_Letrec
     | T_In
