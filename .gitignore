@@ -22,3 +22,6 @@ cabal.sandbox.config
 StgLexer.hs
 StgParser.hs
 ministgwasm.cabal
+
+### test file ###
+testfiles/
