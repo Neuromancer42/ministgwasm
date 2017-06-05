@@ -1,4 +1,6 @@
-module Compiler.Translate where
+module Compiler.Translate
+  ( trProgram
+  ) where
 
 import Compiler.Util
 import qualified Data.List as L
@@ -9,6 +11,8 @@ import LLVM.AST
 import LLVM.AST.CallingConvention
 import qualified LLVM.AST.Constant as Const
 import qualified LLVM.AST.Global as Gbl
+import qualified LLVM.AST.IntegerPredicate as P
+import LLVM.AST.Type
 import qualified Language.MiniStg as STG
 
 -- | translate localbindings to mallocs.
@@ -35,15 +39,7 @@ trFillBind localRef (STG.Var bndr) (STG.LambdaForm [] _ [] expr) =
          let addrname = bndrname ++ "_ad0"
          in (Name addrname :=
              IntToPtr {operand0 = LocalReference int allocname, type' = intptr, metadata = []}) :
-            Do
-              Store
-              { volatile = False
-              , address = LocalReference intptr $ Name addrname
-              , value = ConstantOperand $ trFunc f (L.length as)
-              , maybeAtomicity = Nothing
-              , alignment = 8
-              , metadata = []
-              } :
+            trFunc (Name addrname) f (L.length as) ++
             concat (zipWith (trArg bndrname localRef) as [1 ..])
        STG.AppC (STG.Constr c) as ->
          let addrname = bndrname ++ "_ad0"
@@ -62,18 +58,35 @@ trFillBind localRef (STG.Var bndr) (STG.LambdaForm [] _ [] expr) =
        STG.AppP {} -> error "Syntax error: primitive operation in local binding not supported"
        STG.LitE _ -> []
   where
-    trFunc :: T.Text -> Int -> Const.Constant
-    trFunc f ll =
+    trFunc :: Name -> T.Text -> Int -> [Named Instruction]
+    trFunc ad f ll =
       let l = fromIntegral ll
       in if l > 3
            then error "Syntax Error: Arguments more than 3 not supported"
            else let fname = Name $ T.unpack f
-                in Const.Add False False (Const.Int 64 (l * 2 + funcTag)) $
-                   Const.Mul
-                     False
-                     False
-                     (Const.Int 64 l)
-                     (Const.BitCast (Const.GlobalReference intintfunc fname) int)
+                    temp = Name $ T.unpack f ++ "_ptr"
+                    temp1 = Name $ T.unpack f ++ "_ptr1"
+                    tagged = Name $ T.unpack f ++ "_tagged"
+                in [ temp :=
+                     BitCast (ConstantOperand $ Const.GlobalReference intintfunc fname) intptr []
+                   , temp1 := PtrToInt (LocalReference intptr temp) int []
+                   , tagged :=
+                     Add
+                       False
+                       False
+                       (LocalReference int temp1)
+                       (ConstantOperand $ Const.Int 64 (l * 2 + funcTag))
+                       []
+                   , Do
+                       Store
+                       { volatile = False
+                       , address = LocalReference intptr ad
+                       , value = LocalReference int tagged
+                       , maybeAtomicity = Nothing
+                       , alignment = 8
+                       , metadata = []
+                       }
+                   ]
     trConstr :: T.Text -> Int -> Const.Constant
     trConstr c l =
       let s = T.unpack c
@@ -107,8 +120,8 @@ trFillBind localRef (STG.Var bndr) (STG.LambdaForm [] _ [] expr) =
                    let vname = Name $ T.unpack v
                    in if S.member v ref
                         then LocalReference int vname
-                        else ConstantOperand $
-                             Const.BitCast (Const.GlobalReference intintfunc vname) int
+                        else error
+                               "Error: Global reference in local binding arguments not supported"
            , maybeAtomicity = Nothing
            , alignment = 8
            , metadata = []
@@ -149,7 +162,7 @@ trPreBind (STG.Var bndr) (STG.LambdaForm [] _ [] expr) =
       { tailCallKind = Nothing
       , callingConvention = C
       , returnAttributes = []
-      , function = Right (ConstantOperand (Const.GlobalReference int (Name "malloc")))
+      , function = Right (ConstantOperand (Const.GlobalReference intintfunc (Name "malloc")))
       , arguments = [(ConstantOperand $ Const.Int 64 sz, [])]
       , functionAttributes = []
       , metadata = []
@@ -180,6 +193,9 @@ trLit l = Const.Shl False False (Const.Int 64 l) (Const.Int 64 3)
 -- which is in responsibility to update a thunk
 -- into a construction or a literal
 trTopBind :: STG.Var -> STG.LambdaForm -> Definition
+trTopBind (STG.Var v) (STG.LambdaForm [] _ [] expr)
+  | T.unpack v == "main" =
+    trTopBind (STG.Var (T.pack "__main")) (STG.LambdaForm [] STG.Update [] expr)
 trTopBind (STG.Var f) (STG.LambdaForm fvs _ bndrs expr) =
   GlobalDefinition
     Gbl.functionDefaults
@@ -195,7 +211,7 @@ trTopBind (STG.Var f) (STG.LambdaForm fvs _ bndrs expr) =
     fname :: Name
     fname = Name $ T.unpack f
     as :: [T.Text]
-    as = map (\(STG.Var n) -> n) (fvs ++ bndrs) L.\\ [T.pack "_"]
+    as = map (\(STG.Var n) -> n) (fvs ++ bndrs)
     fetches :: [Named Instruction]
     fetches = concat (zipWith fetcharg as [1 ..])
     initfetch :: [Named Instruction]
@@ -238,7 +254,7 @@ trTopBind (STG.Var f) (STG.LambdaForm fvs _ bndrs expr) =
                 , Name n :=
                   Load
                   { volatile = False
-                  , address = LocalReference int (Name ("ptr_ad" ++ show i))
+                  , address = LocalReference intptr (Name ("ptr_ad" ++ show i))
                   , maybeAtomicity = Nothing
                   , alignment = 8
                   , metadata = []
@@ -308,10 +324,16 @@ trBody i ref (STG.AppP op (STG.AtomLit (STG.Literal xl)) (STG.AtomVar (STG.Var y
     in trUpdateV i ("layer" ++ show i) "exit" (T.unpack y) ++
        [ BasicBlock
            (Name "exit")
-           [ Name "__val" :=
+           [ Name (T.unpack y ++ "__prim") :=
+             LShr
+               False
+               (LocalReference int (Name (T.unpack y ++ "__updated")))
+               (ConstantOperand $ Const.Int 64 3)
+               []
+           , Name "__val" :=
              o
                (ConstantOperand (Const.Int 64 xl))
-               (LocalReference int (Name (T.unpack y ++ "__updated")))
+               (LocalReference int (Name (T.unpack y ++ "__prim")))
            , Name "retval" :=
              Shl
                False
@@ -329,9 +351,15 @@ trBody i ref (STG.AppP op (STG.AtomVar (STG.Var x)) (STG.AtomLit (STG.Literal yl
     in trUpdateV i ("layer" ++ show i) "exit" (T.unpack x) ++
        [ BasicBlock
            (Name "exit")
-           [ Name "__val" :=
-             o
+           [ Name (T.unpack x ++ "__prim") :=
+             LShr
+               False
                (LocalReference int (Name (T.unpack x ++ "__updated")))
+               (ConstantOperand $ Const.Int 64 3)
+               []
+           , Name "__val" :=
+             o
+               (LocalReference int (Name (T.unpack x ++ "__prim")))
                (ConstantOperand (Const.Int 64 yl))
            , Name "retval" :=
              Shl
@@ -351,10 +379,22 @@ trBody i ref (STG.AppP op (STG.AtomVar (STG.Var x)) (STG.AtomVar (STG.Var y)))
        trUpdateV (i + 1) ("layer" ++ show (i + 1)) "exit" (T.unpack y) ++
        [ BasicBlock
            (Name "exit")
-           [ Name "__val" :=
-             o
+           [ Name (T.unpack x ++ "__prim") :=
+             LShr
+               False
                (LocalReference int (Name (T.unpack x ++ "__updated")))
+               (ConstantOperand $ Const.Int 64 3)
+               []
+           , Name (T.unpack y ++ "__prim") :=
+             LShr
+               False
                (LocalReference int (Name (T.unpack y ++ "__updated")))
+               (ConstantOperand $ Const.Int 64 3)
+               []
+           , Name "__val" :=
+             o
+               (LocalReference int (Name (T.unpack x ++ "__prim")))
+               (LocalReference int (Name (T.unpack y ++ "__prim")))
            , Name "retval" :=
              Shl
                False
@@ -401,10 +441,16 @@ trUpdateV i entrylabel exitlabel v =
          (Name entrylabel)
          [ Name (vn ++ "_tag") :=
            And (LocalReference int (Name v)) (ConstantOperand (Const.Int 64 1)) []
+         , Name (vn ++ "_pred") :=
+           ICmp
+             P.EQ
+             (LocalReference int (Name (vn ++ "_tag")))
+             (ConstantOperand (Const.Int 64 1))
+             []
          ]
          (Do $
           CondBr
-            (LocalReference int (Name (vn ++ "_tag")))
+            (LocalReference i1 (Name (vn ++ "_pred")))
             (Name ("fetch" ++ show i))
             (Name ("upd" ++ show i))
             [])
@@ -419,7 +465,7 @@ trUpdateV i entrylabel exitlabel v =
              (LocalReference int (Name (vn ++ "_prim")))
              (ConstantOperand (Const.Int 64 3))
              []
-         , Name (vn ++ "_ptr") := BitCast (LocalReference int (Name (vn ++ "_addr"))) intptr []
+         , Name (vn ++ "_ptr") := IntToPtr (LocalReference int (Name (vn ++ "_addr"))) intptr []
          , Name (vn ++ "_hd") :=
            Load
            { volatile = False
@@ -430,10 +476,12 @@ trUpdateV i entrylabel exitlabel v =
            }
          , Name (vn ++ "_st") :=
            And (LocalReference int (Name (vn ++ "_hd"))) (ConstantOperand (Const.Int 64 1)) []
+         , Name (vn ++ "_pred") :=
+           ICmp P.EQ (LocalReference int (Name (vn ++ "_st"))) (ConstantOperand (Const.Int 64 1)) []
          ]
          (Do $
           CondBr
-            (LocalReference int (Name (vn ++ "_st")))
+            (LocalReference i1 (Name (vn ++ "_pred")))
             (Name ("eval" ++ show i))
             (Name ("upd" ++ show i))
             [])
@@ -452,8 +500,10 @@ trUpdateV i entrylabel exitlabel v =
              (LocalReference int (Name (vn ++ "_func_prim")))
              (ConstantOperand (Const.Int 64 3))
              []
+         , Name (vn ++ "_func_addr1") :=
+           IntToPtr (LocalReference int (Name (vn ++ "_func_addr"))) intptr []
          , Name (vn ++ "_func") :=
-           BitCast (LocalReference int (Name (vn ++ "_func_addr"))) intintfunc []
+           BitCast (LocalReference intptr (Name (vn ++ "_func_addr1"))) intintfunc []
          , Name (vn ++ "_eval") :=
            Call
            { tailCallKind = Nothing
@@ -490,4 +540,60 @@ trOp STG.Mod = \x y -> SRem x y []
 trOp _ = error "Error: Primitive function not supported"
 
 trProgram :: STG.Program -> [Definition]
-trProgram (STG.Program (STG.Binds m)) = map (uncurry trTopBind) (M.assocs m)
+trProgram (STG.Program (STG.Binds m)) = declMalloc : trMain : map (uncurry trTopBind) (M.assocs m)
+
+trMain :: Definition
+trMain =
+  GlobalDefinition
+    functionDefaults
+    {Gbl.name = Name "main", Gbl.returnType = int, Gbl.alignment = 8, Gbl.basicBlocks = [body]}
+  where
+    body =
+      BasicBlock
+        (Name "entry")
+        [ Name "ptr" := Alloca int Nothing 8 []
+        , Name "addr" := PtrToInt (LocalReference intptr (Name "ptr")) int []
+        , Name "a" :=
+          BitCast (ConstantOperand $ Const.GlobalReference intintfunc (Name "__main")) intptr []
+        , Name "callee_cast" := PtrToInt (LocalReference intptr (Name "a")) int []
+        , Name "thunk" :=
+          Add
+            False
+            False
+            (LocalReference int (Name "callee_cast"))
+            (ConstantOperand (Const.Int 64 1))
+            []
+        , Do
+            Store
+            { volatile = False
+            , address = LocalReference intptr (Name "ptr")
+            , value = LocalReference int (Name "thunk")
+            , maybeAtomicity = Nothing
+            , alignment = 8
+            , metadata = []
+            }
+        , Name "val" :=
+          Call
+          { tailCallKind = Nothing
+          , callingConvention = C
+          , returnAttributes = []
+          , function = Right (ConstantOperand $ Const.GlobalReference intintfunc (Name "__main"))
+          , arguments = [(LocalReference int (Name "addr"), [])]
+          , functionAttributes = []
+          , metadata = []
+          }
+        , Name "retval" :=
+          LShr False (LocalReference int (Name "val")) (ConstantOperand (Const.Int 64 3)) []
+        ]
+        (Do $ Ret (Just (LocalReference int (Name "retval"))) [])
+
+-- | declare the malloc function
+declMalloc :: Definition
+declMalloc =
+  GlobalDefinition
+    functionDefaults
+    { Gbl.returnType = int
+    , Gbl.name = Name "malloc"
+    , Gbl.parameters = ([Parameter int (Name "ptr") []], False)
+    , Gbl.alignment = 8
+    }
