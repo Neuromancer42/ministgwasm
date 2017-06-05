@@ -55,10 +55,10 @@ binds :: { Map Var LambdaForm }
       | var '=' lf                      { M.singleton $1 $3 }
 
 lf :: { LambdaForm }
-   : vars pi vars to expr      { LambdaForm $1 Updatable $3 $5 }
-   | pi vars to expr           { LambdaForm [] Updatable $2 $4 }
-   | vars pi to expr           { LambdaForm $1 Updatable [] $4 }
-   | pi to expr                { LambdaForm [] Updatable [] $3 }
+   : vars pi vars to expr      { LambdaForm $1 Update $3 $5 }
+   | pi vars to expr           { LambdaForm [] Update $2 $4 }
+   | vars pi to expr           { LambdaForm $1 Update [] $4 }
+   | pi to expr                { LambdaForm [] Update [] $3 }
 
 expr :: { Expr }
      : let binds in expr                { Let NonRecursive (Binds $2) $4 }

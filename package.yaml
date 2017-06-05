@@ -26,11 +26,12 @@ library:
       - Language.MiniStg.Prettyprint
       - Language.MiniStg.Lexer
       - Language.MiniStg.Parser
+      - Compiler.Translate
 
 executables:
-  parseStg:
+  compileStg:
     source-dirs: app
-    main: parse.hs
+    main: stgCompile.hs
     dependencies:
       - ministgwasm
 
@@ -45,3 +46,4 @@ dependencies:
   - array
   - llvm-hs
   - llvm-hs-pure
+  - mtl
