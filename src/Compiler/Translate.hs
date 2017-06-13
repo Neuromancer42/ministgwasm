@@ -540,7 +540,7 @@ trOp STG.Mod = \x y -> SRem x y []
 trOp _ = error "Error: Primitive function not supported"
 
 trProgram :: STG.Program -> [Definition]
-trProgram (STG.Program (STG.Binds m)) = declMalloc : trMain : map (uncurry trTopBind) (M.assocs m)
+trProgram (STG.Program (STG.Binds m)) =  trMain : map (uncurry trTopBind) (M.assocs m)
 
 trMain :: Definition
 trMain =
